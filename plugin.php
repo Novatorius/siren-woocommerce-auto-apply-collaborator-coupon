@@ -21,35 +21,37 @@ use Siren\WordPress\Core\Providers\AdminNoticeProvider;
 add_action('siren_ready', function () {
     $version = InstanceProvider::get(VersionProvider::class);
 
-    if(version_compare($version->getVersion(), '1.1.0','<')){
+    if (version_compare($version->getVersion(), '1.1.0', '<')) {
         $notices = InstanceProvider::get(AdminNoticeProvider::class);
 
         $notices->addNotice('Siren\'s Auto apply collaborator coupons plugin requires siren 1.1.0 or greater. Coupons will not apply until you update Siren.', 'warning');
+        return;
     }
 
     Event::attach(EngagementsTriggered::class, function (EngagementsTriggered $event) {
-        if ($event->getTriggerStrategyId() === 'referredSiteVisit') {
-            /** @var Engagement $engagement */
-            $engagement = Arr::first($event->getEngagements());
+        if ($event->getTriggerStrategyId() !== 'referredSiteVisit') {
+            return;
+        }
 
-            if (!$engagement) {
-                Logger::info('Coupon was not applied because no engagements were triggered.');
-                return;
+        $engagement = Arr::first($event->getEngagements());
+
+        if (!$engagement instanceof Engagement) {
+            Logger::info('Coupon was not applied because no engagements were triggered.');
+            return;
+        }
+
+        try {
+            if (isset(WC()->session) && ! WC()->session->has_session()) {
+                WC()->session->set_customer_session_cookie(true);
             }
 
-            try {
-                if (isset(WC()->session) && ! WC()->session->has_session()) {
-                    WC()->session->set_customer_session_cookie(true);
-                }
-
-                $alias = CollaboratorAliases::getAliasForCollaborator($engagement->getCollaboratorId(), 'coupon');
-                WC()->cart->apply_coupon($alias->getCode());
-                WC()->cart->calculate_totals();
-                WC()->session->set('sirenCollaboratorCouponCode', $alias->getCode());
-            } catch (RecordNotFoundException $e) {
-                // Collaborator does not have a coupon code.
-                Logger::info('Coupon was not applied because no coupon code was found for this collaborator.');
-            }
+            $alias = CollaboratorAliases::getAliasForCollaborator($engagement->getCollaboratorId(), 'coupon');
+            WC()->cart->apply_coupon($alias->getCode());
+            WC()->cart->calculate_totals();
+            WC()->session->set('sirenCollaboratorCouponCode', $alias->getCode());
+        } catch (RecordNotFoundException $e) {
+            // Collaborator does not have a coupon code.
+            Logger::info('Coupon was not applied because no coupon code was found for this collaborator.');
         }
     });
 
