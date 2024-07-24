@@ -56,10 +56,15 @@ add_action('siren_ready', function () {
     // Add the coupon code when an item is added to the cart.
     add_action('woocommerce_add_to_cart', function () {
         $couponCode = WC()->session->get('sirenCollaboratorCouponCode');
-        $appliedCoupons = WC()->session->get('applied_coupons');
-
-        if (empty($couponCode) || in_array($couponCode, $appliedCoupons)) {
+        if (empty($couponCode)) {
             return;
+        }
+
+        $appliedCoupons = Arr::map(WC()->session->get('applied_coupons'), fn($code) => strtolower($code));
+        $couponCode = strtolower($couponCode);
+
+        if(in_array($couponCode, $appliedCoupons)){
+          return;
         }
 
         WC()->cart->apply_coupon($couponCode);
